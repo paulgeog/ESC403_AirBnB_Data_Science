@@ -16,10 +16,10 @@ The goal of this project is to explore the following:
     - *categorical*: '
 #### Housing stock Zurich: *'bau522od5221_wohnungsbestand_zurich.csv'*
 - *Source*: Inside AirBnB: https://data.stadt-zuerich.ch/dataset/bau_whg_bestand_ea_zizahl_quartier_seit2010_od5221 
-- *Features*: 15'978 (After cleaning: XXX)
+- *Features*: 15'978 (After cleaning: 1002)
 - *Variables*: 15 (After cleaning: XXX)
 #### Zurich Rental Prices per Neighbourhood: *'rental_prices.csv'*
 - *Source*: Inside AirBnB: https://data.stadt-zuerich.ch/dataset/bau_whg_mpe_mietpreis_raum_zizahl_gn_jahr_od5161
-- *Features*: 2'632 (After cleaning: XXX)
+- *Features*: 2'632 (After cleaning: 1316)
 - *Variables*: 35 (After cleaning: XXX)
 ***
