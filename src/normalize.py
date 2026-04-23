@@ -509,7 +509,7 @@ def normalize_housing(housing_df: pd.DataFrame, year: int | None = None) -> pd.D
     return df
 
 
-def normalize_rental(rental_df: pd.DataFrame) -> pd.DataFrame:
+def normalize_rental(rental_df: pd.DataFrame, year: int | None = None) -> pd.DataFrame:
     df = rental_df.copy()
     df = clean_column_names(df)
 
@@ -624,5 +624,15 @@ def normalize_rental(rental_df: pd.DataFrame) -> pd.DataFrame:
     for col in cat_cols:
         if col in df.columns:
             df[col] = df[col].astype("category")
+
+
+    if year is not None and "is_april_2024" in df.columns:
+        if year == 2024:
+            year_bool = True
+        if year == 2022:
+            year_bool = False
+        if year not in [2022,2024]:
+            raise ValueError
+        df = df[df["is_april_2024"] == year_bool]
 
     return df
