@@ -509,7 +509,13 @@ def normalize_housing(housing_df: pd.DataFrame, year: int | None = None) -> pd.D
     return df
 
 
-def normalize_rental(rental_df: pd.DataFrame, year: int | None = None) -> pd.DataFrame:
+def normalize_rental(rental_df: pd.DataFrame,
+                     year: int | None = None,
+                     brutto: bool | None = None,
+                     sqm: bool | None = None,
+                     level: int | None = None,
+                     aggr_rooms: bool = True
+                     ) -> pd.DataFrame:
     df = rental_df.copy()
     df = clean_column_names(df)
 
@@ -533,8 +539,7 @@ def normalize_rental(rental_df: pd.DataFrame, year: int | None = None) -> pd.Dat
     # -------------------------
     if "raumeinheitlang" in df.columns:
         df["raumeinheitlang"] = df["raumeinheitlang"].astype("category")
-
-    df = df.drop(columns=["raumeinheitsort"], errors="ignore")
+    # raumeinheitsort will be dropped further down in the code, once it is not needed anymore
 
     # -------------------------
     # binary columns
@@ -584,8 +589,7 @@ def normalize_rental(rental_df: pd.DataFrame, year: int | None = None) -> pd.Dat
             categories=room_order,
             ordered=True,
         )
-
-    df = df.drop(columns=["zimmersort"], errors="ignore")
+    # zimmersort will be dropped further down in the code, once it is not needed anymore
 
     # -------------------------
     # gliederung unpack
@@ -626,13 +630,36 @@ def normalize_rental(rental_df: pd.DataFrame, year: int | None = None) -> pd.Dat
             df[col] = df[col].astype("category")
 
 
+    # -------------------------
+    # apply parameter masks
+    # -------------------------
     if year is not None and "is_april_2024" in df.columns:
         if year == 2024:
             year_bool = True
         if year == 2022:
             year_bool = False
         if year not in [2022,2024]:
-            raise ValueError
+            raise ValueError("Valid years: 2022, 2024")
         df = df[df["is_april_2024"] == year_bool]
+
+    if brutto is not None and "is_brutto" in df.columns:
+        df = df[df["is_brutto"] == brutto]
+    
+    if sqm is not None and "is_per_sqm" in df.columns:
+        df = df[df["is_per_sqm"] == sqm]
+
+    if level is not None and "raumeinheitsort" in df.columns:
+        if level not in range(1,6,1):
+            raise ValueError("Valid leves: 1,2,4,5")
+        df = df[df["raumeinheitsort"] == level]
+
+    # remove raumeinheitsort, now that we don't need it anymore for filtering levels
+    df = df.drop(columns=["raumeinheitsort"], errors="ignore")
+
+    if aggr_rooms == False and "zimmersort" in df.columns:
+        df = df[df["zimmersort"] != 9]
+
+    # remove zimmersort, now that we don't need it anymore for filtering levels
+    df = df.drop(columns=["zimmersort"], errors="ignore")
 
     return df
