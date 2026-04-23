@@ -514,7 +514,7 @@ def normalize_rental(rental_df: pd.DataFrame,
                      brutto: bool | None = None,
                      sqm: bool | None = None,
                      level: int | None = None,
-                     aggr_rooms: bool = True
+                     cat_zimmer: bool = False
                      ) -> pd.DataFrame:
     df = rental_df.copy()
     df = clean_column_names(df)
@@ -571,46 +571,25 @@ def normalize_rental(rental_df: pd.DataFrame,
     # -------------------------
     # zimmer
     # -------------------------
-    if "zimmerlang" in df.columns:
-        df["zimmerlang"] = (
-            df["zimmerlang"]
-            .astype("string")
-            .str.replace(r"\s+", " ", regex=True)
-            .str.strip()
-            .replace({
-                "2 , 3 und 4 Zimmer": pd.NA,
-                "2 , 3  und 4 Zimmer": pd.NA,
-            })
-        )
+    if cat_zimmer == True:
+        if "zimmerlang" in df.columns:
+            df["zimmerlang"] = (
+                df["zimmerlang"]
+                .astype("string")
+            )
 
-        room_order = ["2 Zimmer", "3 Zimmer", "4 Zimmer"]
-        df["zimmerlang"] = pd.Categorical(
-            df["zimmerlang"],
-            categories=room_order,
-            ordered=True,
-        )
-    # zimmersort will be dropped further down in the code, once it is not needed anymore
-
+            room_order = ["2 Zimmer", "3 Zimmer", "4 Zimmer"]
+            df["zimmerlang"] = pd.Categorical(
+                df["zimmerlang"],
+                categories=room_order,
+                ordered=True,
+            )
+    df = df.drop(columns=["zimmersort"], errors="ignore")
     # -------------------------
-    # gliederung unpack
+    # gliederung
     # -------------------------
     if "gliederunglang" in df.columns:
         gl = df["gliederunglang"].astype("string").str.strip()
-
-        contract_mask = gl.str.contains("Neubau|Neubezug|Mietverträge", regex=True, na=False)
-        kreis_mask = gl.str.startswith("Kreis ", na=False)
-        area_mask = gl.str.contains(r"\(Kreis \d+\)", regex=True, na=False)
-        city_mask = gl.eq("Ganze Stadt")
-
-        df["gliederung_city"] = gl.where(city_mask)
-        df["gliederung_kreis"] = gl.where(kreis_mask)
-        df["gliederung_area"] = gl.where(area_mask)
-        df["gliederung_contract_age"] = gl.where(contract_mask)
-        df["gliederung_quartier"] = gl.where(
-            ~(city_mask | kreis_mask | area_mask | contract_mask)
-        )
-
-    df = df.drop(columns=["gliederungsort", "gliederunglang"], errors="ignore")
 
     # -------------------------
     # categories
@@ -652,14 +631,9 @@ def normalize_rental(rental_df: pd.DataFrame,
         if level not in range(1,6,1):
             raise ValueError("Valid leves: 1,2,4,5")
         df = df[df["raumeinheitsort"] == level]
+        df = df[df["gliederungsort"] > 0]
 
     # remove raumeinheitsort, now that we don't need it anymore for filtering levels
     df = df.drop(columns=["raumeinheitsort"], errors="ignore")
-
-    if aggr_rooms == False and "zimmersort" in df.columns:
-        df = df[df["zimmersort"] != 9]
-
-    # remove zimmersort, now that we don't need it anymore for filtering levels
-    df = df.drop(columns=["zimmersort"], errors="ignore")
 
     return df
