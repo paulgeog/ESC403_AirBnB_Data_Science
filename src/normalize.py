@@ -484,7 +484,7 @@ def normalize_airbnb(airbnb_df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def normalize_housing(housing_df: pd.DataFrame) -> pd.DataFrame:
+def normalize_housing(housing_df: pd.DataFrame, year: int | None = None) -> pd.DataFrame:
     df = housing_df.copy()
     df = clean_column_names(df)
 
@@ -502,6 +502,9 @@ def normalize_housing(housing_df: pd.DataFrame) -> pd.DataFrame:
     for col in cat_cols:
         if col in df.columns:
             df[col] = df[col].astype("category")
+
+    if year is not None and "stichtagdatjahr" in df.columns:
+        df = df[df["stichtagdatjahr"] == year]
 
     return df
 
