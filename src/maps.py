@@ -4,9 +4,9 @@ import folium
 import branca.colormap as cm
 import numpy as np
 
-# ------------------------------------------
-# Map of Zurich with airbnb listings for EDA
-# ------------------------------------------
+# -------------------------------------------------
+# 4.1.3. Map of Zurich with airbnb listings for EDA
+# -------------------------------------------------
 
 # helper function to calculate color from price
 def get_color(price):
