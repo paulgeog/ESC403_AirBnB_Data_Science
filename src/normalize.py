@@ -484,7 +484,7 @@ def normalize_airbnb(airbnb_df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def normalize_housing(housing_df: pd.DataFrame) -> pd.DataFrame:
+def normalize_housing(housing_df: pd.DataFrame, year: int | None = None) -> pd.DataFrame:
     df = housing_df.copy()
     df = clean_column_names(df)
 
@@ -503,10 +503,19 @@ def normalize_housing(housing_df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             df[col] = df[col].astype("category")
 
+    if year is not None and "stichtagdatjahr" in df.columns:
+        df = df[df["stichtagdatjahr"] == year]
+
     return df
 
 
-def normalize_rental(rental_df: pd.DataFrame) -> pd.DataFrame:
+def normalize_rental(rental_df: pd.DataFrame,
+                     year: int | None = None,
+                     brutto: bool | None = None,
+                     sqm: bool | None = None,
+                     level: int | None = None,
+                     cat_zimmer: bool = False
+                     ) -> pd.DataFrame:
     df = rental_df.copy()
     df = clean_column_names(df)
 
@@ -530,8 +539,7 @@ def normalize_rental(rental_df: pd.DataFrame) -> pd.DataFrame:
     # -------------------------
     if "raumeinheitlang" in df.columns:
         df["raumeinheitlang"] = df["raumeinheitlang"].astype("category")
-
-    df = df.drop(columns=["raumeinheitsort"], errors="ignore")
+    # raumeinheitsort will be dropped further down in the code, once it is not needed anymore
 
     # -------------------------
     # binary columns
@@ -563,47 +571,25 @@ def normalize_rental(rental_df: pd.DataFrame) -> pd.DataFrame:
     # -------------------------
     # zimmer
     # -------------------------
-    if "zimmerlang" in df.columns:
-        df["zimmerlang"] = (
-            df["zimmerlang"]
-            .astype("string")
-            .str.replace(r"\s+", " ", regex=True)
-            .str.strip()
-            .replace({
-                "2 , 3 und 4 Zimmer": pd.NA,
-                "2 , 3  und 4 Zimmer": pd.NA,
-            })
-        )
+    if cat_zimmer == True:
+        if "zimmerlang" in df.columns:
+            df["zimmerlang"] = (
+                df["zimmerlang"]
+                .astype("string")
+            )
 
-        room_order = ["2 Zimmer", "3 Zimmer", "4 Zimmer"]
-        df["zimmerlang"] = pd.Categorical(
-            df["zimmerlang"],
-            categories=room_order,
-            ordered=True,
-        )
-
+            room_order = ["2 Zimmer", "3 Zimmer", "4 Zimmer"]
+            df["zimmerlang"] = pd.Categorical(
+                df["zimmerlang"],
+                categories=room_order,
+                ordered=True,
+            )
     df = df.drop(columns=["zimmersort"], errors="ignore")
-
     # -------------------------
-    # gliederung unpack
+    # gliederung
     # -------------------------
     if "gliederunglang" in df.columns:
         gl = df["gliederunglang"].astype("string").str.strip()
-
-        contract_mask = gl.str.contains("Neubau|Neubezug|Mietverträge", regex=True, na=False)
-        kreis_mask = gl.str.startswith("Kreis ", na=False)
-        area_mask = gl.str.contains(r"\(Kreis \d+\)", regex=True, na=False)
-        city_mask = gl.eq("Ganze Stadt")
-
-        df["gliederung_city"] = gl.where(city_mask)
-        df["gliederung_kreis"] = gl.where(kreis_mask)
-        df["gliederung_area"] = gl.where(area_mask)
-        df["gliederung_contract_age"] = gl.where(contract_mask)
-        df["gliederung_quartier"] = gl.where(
-            ~(city_mask | kreis_mask | area_mask | contract_mask)
-        )
-
-    df = df.drop(columns=["gliederungsort", "gliederunglang"], errors="ignore")
 
     # -------------------------
     # categories
@@ -621,5 +607,33 @@ def normalize_rental(rental_df: pd.DataFrame) -> pd.DataFrame:
     for col in cat_cols:
         if col in df.columns:
             df[col] = df[col].astype("category")
+
+
+    # -------------------------
+    # apply parameter masks
+    # -------------------------
+    if year is not None and "is_april_2024" in df.columns:
+        if year == 2024:
+            year_bool = True
+        if year == 2022:
+            year_bool = False
+        if year not in [2022,2024]:
+            raise ValueError("Valid years: 2022, 2024")
+        df = df[df["is_april_2024"] == year_bool]
+
+    if brutto is not None and "is_brutto" in df.columns:
+        df = df[df["is_brutto"] == brutto]
+    
+    if sqm is not None and "is_per_sqm" in df.columns:
+        df = df[df["is_per_sqm"] == sqm]
+
+    if level is not None and "raumeinheitsort" in df.columns:
+        if level not in range(1,6,1):
+            raise ValueError("Valid leves: 1,2,4,5")
+        df = df[df["raumeinheitsort"] == level]
+        df = df[df["gliederungsort"] > 0]
+
+    # remove raumeinheitsort, now that we don't need it anymore for filtering levels
+    df = df.drop(columns=["raumeinheitsort"], errors="ignore")
 
     return df
