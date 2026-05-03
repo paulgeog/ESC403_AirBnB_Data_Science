@@ -1,7 +1,8 @@
 import geopandas as gpd
-import matplotlib as plt
+import matplotlib.pyplot as plt
 import folium
 import branca.colormap as cm
+from cmcrameri import cm as cmc
 import numpy as np
 
 # -------------------------------------------------
@@ -106,3 +107,18 @@ def zurich_map_eda(airbnb_gdf: gpd, forest: gpd, quartiere: gpd) -> map:
     # add toggle for layers and return map
     folium.LayerControl().add_to(m)
     return m
+
+
+# -------------------------------------------------
+# 4.3.2. Mapping rental prices
+# -------------------------------------------------
+def quartier_map(gdf: gpd.GeoDataFrame, column: str, title: str) -> None:
+    fig, ax = plt.subplots(figsize=(7, 7))
+    gdf.plot(ax=ax,
+             column=column,
+             cmap=cmc.lapaz,
+             legend=True)
+    ax.axis("off")
+    plt.title(title)
+    plt.tight_layout
+

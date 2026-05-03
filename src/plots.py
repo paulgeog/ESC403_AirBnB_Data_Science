@@ -1,4 +1,5 @@
 import pandas as pd
+import geopandas as gpd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
@@ -65,7 +66,7 @@ def plot_corr_heatmap(df: pd.DataFrame) -> None:
     plt.show()
 
 # ------------------------------------------
-# 4.2.1. Box Pliot and  Stacked Bar Chart
+# 4.2.1. Box Plot and  Stacked Bar Chart
 # ------------------------------------------
 
 # restructure df to get columns by number of rooms
@@ -86,7 +87,8 @@ def restructure_housing_by_rooms(df: pd.DataFrame) -> pd.DataFrame:
 
 # double plot with boxplot and stacked bar chart
 def box_and_stacked_housing_stock(df: pd.DataFrame) -> pd.DataFrame:
-
+    # sorting the df by 1 room
+    df = df.sort_values(1, ascending=False)
     # initiate the plot canvas
     fig, axs = plt.subplots(
         1, 2,
@@ -114,6 +116,27 @@ def box_and_stacked_housing_stock(df: pd.DataFrame) -> pd.DataFrame:
         bbox_to_anchor=(1.02, 1),
         loc="upper left"
     )
-    axs[1].set_title("Stacked bar chart: share of objects per quartier according to number of rooms")
+    axs[1].set_title("Share of objects per quartier according to number of rooms")
 
+    plt.show()
+
+# ------------------------------------------
+# 4.2.2. Airbnbs per square kilometer
+# 4.3.1. Price for each quartier
+# ------------------------------------------
+
+def plot_per_quartier(df: gpd.GeoDataFrame, column: str, title: str, ylabel: str, grid: bool = False) -> None:
+    fig, ax = plt.subplots(figsize=(12,5))
+    df[column].plot(
+            kind="bar",
+            stacked=False,
+            ax=ax,
+            zorder=3
+        )
+    ax.set_xlabel("")
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    if grid:
+        plt.grid(zorder=0)
+    plt.tight_layout()
     plt.show()
