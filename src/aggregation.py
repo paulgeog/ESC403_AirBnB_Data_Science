@@ -1,4 +1,5 @@
 import pandas as pd
+import geopandas as gpd
 
 def quartiere_standardized_housing(df: pd.DataFrame) -> pd.DataFrame:
     df_q = df.pivot_table(index=["quarlang", "quarsort", "kreissort"],
