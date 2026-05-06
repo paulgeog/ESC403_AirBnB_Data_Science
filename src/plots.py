@@ -4,6 +4,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 import re
+import statsmodels.api as sm
+from statsmodels.graphics.gofplots import ProbPlot
+from statsmodels.stats.outliers_influence import OLSInfluence
+
 
 # ------------------------------------------
 # 4.1.4. Correlation Matrix
@@ -140,3 +144,129 @@ def plot_per_quartier(df: gpd.GeoDataFrame, column: str, title: str, ylabel: str
         plt.grid(zorder=0)
     plt.tight_layout()
     plt.show()
+
+
+# ------------------------------------------
+# 5.3. linear regression
+# ------------------------------------------
+
+def plot_fit_resid(X: pd.DataFrame, y: pd.DataFrame) -> None:
+    # linear regression model
+    # model
+    reg = sm.OLS(y, X).fit()
+    # -------------------------------------------
+    # parameter calculation
+    X2 = X["airbnb_density"]
+    infl = OLSInfluence(reg)
+    fitted = reg.fittedvalues
+    resid = reg.resid
+    resid_norm = reg.get_influence().resid_studentized_internal
+    resid_abs_norm_sqr = np.sqrt(np.abs(resid_norm))
+    resid_abs = np.abs(resid)
+    resid_stud = infl.resid_studentized_internal.to_numpy()
+    leverage = infl.hat_matrix_diag
+    cooks = infl.cooks_distance[0]
+    inter, s = reg.params
+    line = s * X + inter
+    # -------------------------------------------
+    # plot setup
+    fig, axs = plt.subplots(1,5, figsize=(18, 4))
+    # -------------------------------------------
+    # scatter plot of regression line
+    axs[0].scatter(X2,y,
+                   marker="o",
+                   s=25,
+                   facecolors="none",
+                   edgecolors="grey")
+    axs[0].plot(X2, line, lw=1, color='red', alpha=0.8)
+    axs[0].set_xlabel("Predictor")
+    x_pad = 0.05 * (max(X2) - min(X2))
+    y_pad = 0.05 * (max(y) - min(y))
+    axs[0].set_xlim(min(X2) - x_pad, max(X2) + x_pad)
+    axs[0].set_ylim(min(y) - y_pad, max(y) + y_pad)
+    axs[0].set_ylabel("Response")
+    axs[0].set_title("Linear Regression Model")
+    # -------------------------------------------
+    # Residuals vs. fitted plot
+    sns.residplot(x=fitted,
+                  y=resid,
+                  lowess=True,
+                  scatter_kws={
+                      "marker": "o",
+                      "s":25,
+                      "facecolors": "none",
+                      "edgecolors": "grey"
+                      },
+                  line_kws={
+                      'color': 'red',
+                      'lw': 1,
+                      'alpha': 0.8
+                      },
+                  ax=axs[1])
+    axs[1].axhline(0,
+                   color="darkgrey",
+                   linewidth=1,
+                   linestyle="--")
+    axs[1].set_xlabel("Fitted values")
+    axs[1].set_ylabel("Residuals")
+    axs[1].set_title("Residuals vs Fitted")
+    # -------------------------------------------
+    # Normal Q-Q Plot
+    QQ = ProbPlot(resid_norm)
+    QQ.qqplot(line='45',
+                          lw=1,
+                          marker="o",
+                          markersize=5,
+                          markerfacecolor="none",
+                          markeredgecolor="grey",
+                          ax=axs[2])
+    axs[2].lines[1].set_alpha(0.8)
+    axs[2].set_title('Normal Q-Q')
+    axs[2].set_xlabel('Theoretical Quantiles')
+    axs[2].set_ylabel('Standardized Residuals')
+    # -------------------------------------------
+    # Scale-Location
+    axs[3].scatter(fitted,resid_abs_norm_sqr,
+                   marker="o",
+                   s=25,
+                   facecolors="none",
+                   edgecolors="grey")
+    sns.regplot(x=fitted, y=resid_abs_norm_sqr,
+              scatter=False,
+              ci=False,
+              lowess=True,
+              line_kws={'color': 'red', 'lw': 1, 'alpha': 0.8},
+              ax=axs[3])
+    axs[3].set_title('Scale-Location')
+    axs[3].set_xlabel('Fitted values')
+    axs[3].set_ylabel('$\sqrt{|Standardized Residuals|}$')
+    # -------------------------------------------
+    # Residuals vs. Leverage
+    threshold = 4 / len(fitted)
+    influential_points = np.where(cooks > threshold)[0]
+
+    axs[4].scatter(
+        leverage,
+        resid_stud,
+        s=80 * cooks,
+        marker='o',
+        facecolors='none',
+        edgecolors='grey'
+    )
+    if influential_points.size > 0:
+        for i in influential_points:
+            axs[4].annotate(i, (leverage[i], resid_stud[i]))
+    axs[4].set_xlabel("Leverage")
+    axs[4].set_ylabel("Studentized Residuals")
+    axs[4].set_title("Influence Plot")
+
+    
+    
+
+    plt.tight_layout()
+    plt.show()
+
+
+
+
+
