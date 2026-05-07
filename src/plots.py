@@ -185,7 +185,7 @@ def plot_fit_resid(X: pd.DataFrame, y: pd.DataFrame) -> None:
     axs[0].set_xlim(min(X2) - x_pad, max(X2) + x_pad)
     axs[0].set_ylim(min(y) - y_pad, max(y) + y_pad)
     axs[0].set_ylabel("Response")
-    axs[0].set_title("Linear Regression Model")
+    axs[0].set_title("1) Linear Regression Model")
     # -------------------------------------------
     # Residuals vs. fitted plot
     sns.residplot(x=fitted,
@@ -209,7 +209,7 @@ def plot_fit_resid(X: pd.DataFrame, y: pd.DataFrame) -> None:
                    linestyle="--")
     axs[1].set_xlabel("Fitted values")
     axs[1].set_ylabel("Residuals")
-    axs[1].set_title("Residuals vs Fitted")
+    axs[1].set_title("2) Residuals vs Fitted")
     # -------------------------------------------
     # Normal Q-Q Plot
     QQ = ProbPlot(resid_norm)
@@ -221,9 +221,9 @@ def plot_fit_resid(X: pd.DataFrame, y: pd.DataFrame) -> None:
                           markeredgecolor="grey",
                           ax=axs[2])
     axs[2].lines[1].set_alpha(0.8)
-    axs[2].set_title('Normal Q-Q')
-    axs[2].set_xlabel('Theoretical Quantiles')
-    axs[2].set_ylabel('Standardized Residuals')
+    axs[2].set_xlabel("Theoretical Quantiles")
+    axs[2].set_ylabel("Standardized Residuals")
+    axs[2].set_title("3) Normal Q-Q")
     # -------------------------------------------
     # Scale-Location
     axs[3].scatter(fitted,resid_abs_norm_sqr,
@@ -235,11 +235,11 @@ def plot_fit_resid(X: pd.DataFrame, y: pd.DataFrame) -> None:
               scatter=False,
               ci=False,
               lowess=True,
-              line_kws={'color': 'red', 'lw': 1, 'alpha': 0.8},
+              line_kws={"color": "red", "lw": 1, "alpha": 0.8},
               ax=axs[3])
-    axs[3].set_title('Scale-Location')
-    axs[3].set_xlabel('Fitted values')
-    axs[3].set_ylabel('$\sqrt{|Standardized Residuals|}$')
+    axs[3].set_xlabel("Fitted values")
+    axs[3].set_ylabel(r"$\sqrt{|Standardized Residuals|}$")
+    axs[3].set_title("4) Scale-Location")
     # -------------------------------------------
     # Residuals vs. Leverage
     threshold = 4 / len(fitted)
@@ -249,16 +249,16 @@ def plot_fit_resid(X: pd.DataFrame, y: pd.DataFrame) -> None:
         leverage,
         resid_stud,
         s=80 * cooks,
-        marker='o',
-        facecolors='none',
-        edgecolors='grey'
+        marker="o",
+        facecolors="none",
+        edgecolors="grey"
     )
     if influential_points.size > 0:
         for i in influential_points:
             axs[4].annotate(i, (leverage[i], resid_stud[i]))
     axs[4].set_xlabel("Leverage")
     axs[4].set_ylabel("Studentized Residuals")
-    axs[4].set_title("Influence Plot")
+    axs[4].set_title("5) Influence Plot")
 
     
     
