@@ -6,7 +6,56 @@ import numpy as np
 import re
 
 # ------------------------------------------
-# 4.1.4. Correlation Matrix
+# 4.1.1. Airbnb/ Price
+# ------------------------------------------
+
+def plot_price_hist_box(df: pd.DataFrame) -> None:
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize = (10,7))
+
+    ax1.hist(df["price"], bins = 100)
+    ax1.set_xlabel("price")
+    ax1.set_ylabel("count")
+    ax1.set_title("Histogram 'price' (bin=100)")
+
+    sns.boxplot(ax=ax2, data=df, y="price")
+    ax2.set_title("Boxplot 'price'")
+
+    ax3.hist(df["price"], bins = 1000)
+    ax3.set_xlim(0,1000)
+    ax3.set_xlabel("price")
+    ax3.set_ylabel("count")
+    ax3.set_title("Histogram 'price' cropped (bin=1000)")
+
+    sns.boxplot(ax=ax4, data=df, y="price")
+    ax4.set_ylim(0,500)
+    ax4.set_title("Boxplot 'price' cropped")
+
+    plt.tight_layout()
+    plt.show()
+
+# ------------------------------------------
+# 4.1.2. Airbnb/ Reviews
+# 4.4. Comparing rental prices and housing stock variance
+# ------------------------------------------
+
+def plot_multiple_boxplot(df: pd.DataFrame, cols: list, col_names: list, ylim_min: float, ylim_max: float, title: str = None, grid: bool = False) -> None:
+    plot_width = len(cols) * 1.57 + 1
+    fig, ax = plt.subplots(figsize=(plot_width,4))
+    sns.boxplot(ax=ax, data=df[cols],
+                order=cols
+                )
+    ax.set_xticks(range(len(cols)))
+    ax.set_xticklabels(col_names)
+    ax.set_ylim(ylim_min,ylim_max)
+    ax.set_title(title)
+    if grid == True:
+        plt.grid(zorder=0,
+                 alpha=0.4)
+    plt.tight_layout()
+    plt.show()
+
+# ------------------------------------------
+# 4.1.4. Airbnb/ Correlation Matrix
 # ------------------------------------------
 
 # function for prepping the dataset
@@ -66,7 +115,7 @@ def plot_corr_heatmap(df: pd.DataFrame) -> None:
     plt.show()
 
 # ------------------------------------------
-# 4.2.1. Box Plot and  Stacked Bar Chart
+# 4.2.1. Housing Stock/ Box Plot and  Stacked Bar Chart
 # ------------------------------------------
 
 # restructure df to get columns by number of rooms
@@ -121,8 +170,8 @@ def box_and_stacked_housing_stock(df: pd.DataFrame) -> pd.DataFrame:
     plt.show()
 
 # ------------------------------------------
-# 4.2.2. Airbnbs per square kilometer
-# 4.3.1. Price for each quartier
+# 4.2.2. Housing Stock/ Airbnbs per square kilometer
+# 4.3.1. Rental Prices/ Price for each quartier
 # ------------------------------------------
 
 def plot_per_quartier(df: gpd.GeoDataFrame, column: str, title: str, ylabel: str, grid: bool = False) -> None:

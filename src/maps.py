@@ -6,7 +6,7 @@ from cmcrameri import cm as cmc
 import numpy as np
 
 # -------------------------------------------------
-# 4.1.3. Map of Zurich with airbnb listings for EDA
+# 4.1.3. Airbnb/ Map of Zurich with airbnb listings for EDA
 # -------------------------------------------------
 
 # helper function to calculate color from price
@@ -28,7 +28,7 @@ def zurich_map_eda(airbnb_gdf: gpd, forest: gpd, quartiere: gpd) -> map:
         zoom_start=12,
         min_zoom=12,
         max_zoom=17,
-        tiles="CartoDB dark_matter"
+        tiles="CartoDB dark-matter" # the bright map would be CartoDB positron
         )
     
     # load forest
@@ -110,7 +110,8 @@ def zurich_map_eda(airbnb_gdf: gpd, forest: gpd, quartiere: gpd) -> map:
 
 
 # -------------------------------------------------
-# 4.3.2. Mapping rental prices
+# 4.2.2. Housing stock/ Geographic distribution of airbnb stock
+# 4.3.1. Rental price/ Geographic distribution of rental prices
 # -------------------------------------------------
 def quartier_map(gdf: gpd.GeoDataFrame, column: str, title: str) -> None:
     fig, ax = plt.subplots(figsize=(7, 7))
