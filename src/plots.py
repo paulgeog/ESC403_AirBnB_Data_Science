@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 import re
+import folium
 
 # ------------------------------------------
 # 4.1.1. Airbnb/ Price
@@ -187,5 +188,187 @@ def plot_per_quartier(df: gpd.GeoDataFrame, column: str, title: str, ylabel: str
     ax.set_title(title)
     if grid:
         plt.grid(zorder=0)
+    plt.tight_layout()
+    plt.show()
+
+
+
+
+
+
+# ===========================================================
+# ===========Clustering pipeline (Chapter 5)=================
+# ===========================================================
+# ------------------------------------------
+# 5.4. K-Means sweep (elbow + silhouette)
+# ------------------------------------------
+def plot_kmeans_sweep(
+    sweep_a: pd.DataFrame,
+    sweep_b: pd.DataFrame,
+    labels: tuple[str, str],
+) -> None:
+    # 2x2 grid: top row inertia (elbow), bottom row silhouette; left col = sweep_a, right col = sweep_b
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+
+    for col, sweep, label in zip([0, 1], [sweep_a, sweep_b], labels):
+        ax_elbow = axes[0][col]
+        ax_sil   = axes[1][col]
+
+        ax_elbow.plot(sweep["k"], sweep["inertia"], "o-")
+        ax_elbow.set_title(f"Elbow — {label}")
+        ax_elbow.set_xlabel("k")
+        ax_elbow.set_ylabel("Inertia")
+        ax_elbow.grid(alpha=0.3)
+
+        ax_sil.plot(sweep["k"], sweep["silhouette"], "o-", color="orange")
+        ax_sil.set_title(f"Silhouette — {label}")
+        ax_sil.set_xlabel("k")
+        ax_sil.set_ylabel("Silhouette score")
+        ax_sil.grid(alpha=0.3)
+
+    plt.tight_layout()
+    plt.show()
+
+
+# ------------------------------------------
+# 5.4. / 5.5. Cluster scatter in 2D space (PCA or UMAP)
+# ------------------------------------------
+def plot_clusters_2d(
+    X_a: np.ndarray, labels_a: np.ndarray,
+    X_b: np.ndarray, labels_b: np.ndarray,
+    titles: tuple[str, str],
+    axis_labels: tuple[str, str] = ("Component 1", "Component 2"),
+) -> None:
+    # Side-by-side 2D scatter of two cluster solutions, colored by label
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+    for ax, X, labels, title in zip(axes, [X_a, X_b], [labels_a, labels_b], titles):
+        for cluster_id in np.unique(labels):
+            mask = labels == cluster_id
+            ax.scatter(X[mask, 0], X[mask, 1], s=10, alpha=0.7, label=f"Cluster {cluster_id}")
+        ax.set_title(title)
+        ax.set_xlabel(axis_labels[0])
+        ax.set_ylabel(axis_labels[1])
+        ax.legend(markerscale=2, fontsize=8)
+
+    plt.tight_layout()
+    plt.show()
+
+
+# ------------------------------------------
+# 5.6. Cluster review heatmap
+# ------------------------------------------
+def plot_cluster_review_heatmap(
+    profile: pd.DataFrame,
+    review_cols: list[str],
+    title: str,
+) -> None:
+    # Heatmap of cluster x review-dimension means
+    data = profile[review_cols]
+    fig, ax = plt.subplots(figsize=(len(review_cols) * 1.2 + 1, len(data) * 0.8 + 1))
+    sns.heatmap(
+        data,
+        ax=ax,
+        annot=True,
+        fmt=".2f",
+        cmap="YlOrRd",
+        linewidths=0.5,
+        cbar_kws={"label": "Mean score"},
+    )
+    ax.set_title(title)
+    ax.set_ylabel("Cluster")
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=30, ha="right")
+    plt.tight_layout()
+    plt.show()
+
+
+# ------------------------------------------
+# 5.7. Geographic distribution of clusters
+# ------------------------------------------
+def zurich_map_clusters(
+    airbnb_gdf: "gpd.GeoDataFrame",
+    forest: "gpd.GeoDataFrame",
+    quartiere: "gpd.GeoDataFrame",
+    cluster_col: str,
+    title: str = "",
+) -> "folium.Map":
+    # Folium map of listings colored by cluster label
+    # Mirrors the structure of zurich_map_eda() in src/maps.py
+    # (forest layer, quartier borders, listings layer, layer control)
+    # Uses categorical color per cluster instead of log-price colormap
+    PALETTE = {0: "#4C72B0", 1: "#DD8452", 2: "#55A868", 3: "#C44E52", 4: "#8172B3"}
+
+    m = folium.Map(
+        location=[47.3769, 8.5417],
+        zoom_start=12,
+        min_zoom=12,
+        max_zoom=17,
+        tiles="CartoDB dark-matter",
+    )
+
+    folium.GeoJson(forest, name="Forested areas",
+                   style_function=lambda x: {"color": "green", "weight": 1,
+                                             "opacity": 0.5, "fillOpacity": 0.2}
+                   ).add_to(m)
+
+    folium.GeoJson(quartiere, name="Quartier borders",
+                   style_function=lambda x: {"color": "white", "weight": 1,
+                                             "opacity": 0.7, "fillOpacity": 0},
+                   tooltip=folium.GeoJsonTooltip(fields=["qname"], aliases=["Quartier:"])
+                   ).add_to(m)
+
+    listings_layer = folium.FeatureGroup(name="Airbnb Listings")
+    for _, row in airbnb_gdf.iterrows():
+        color = PALETTE.get(int(row[cluster_col]), "#999999")
+        folium.CircleMarker(
+            location=[row.geometry.y, row.geometry.x],
+            radius=3,
+            stroke=False,
+            fill=True,
+            fill_color=color,
+            fill_opacity=1,
+            tooltip=f"Cluster {int(row[cluster_col])}",
+        ).add_to(listings_layer)
+    listings_layer.add_to(m)
+
+    legend_items = "".join(
+        f'<i style="background:{PALETTE[k]};width:10px;height:10px;display:inline-block;margin-right:4px"></i>Cluster {k}<br>'
+        for k in sorted(PALETTE)
+    )
+    legend_html = f"""
+    <div style="position:fixed;bottom:50px;left:50px;z-index:9999;
+                background-color:rgba(0,0,0,0.7);color:white;padding:10px;
+                border-radius:6px;font-size:14px;">
+    <b>{title}</b><br>{legend_items}
+    </div>"""
+    m.get_root().html.add_child(folium.Element(legend_html))
+
+    folium.LayerControl().add_to(m)
+    return m
+
+
+def plot_cluster_share_per_quartier(
+    df: pd.DataFrame,
+    cluster_col: str,
+    quartier_col: str,
+    title: str,
+) -> None:
+    # Stacked bar chart: x=quartier, y=share (%), stacks=cluster
+    counts = (
+        df.groupby([quartier_col, cluster_col])
+        .size()
+        .unstack(fill_value=0)
+    )
+    shares = counts.div(counts.sum(axis=1), axis=0) * 100
+    shares = shares.sort_index()
+
+    fig, ax = plt.subplots(figsize=(14, 5))
+    shares.plot(kind="bar", stacked=True, ax=ax, colormap="tab10", width=0.85)
+    ax.set_xlabel("")
+    ax.set_ylabel("Share (%)")
+    ax.set_ylim(0, 100)
+    ax.set_title(title)
+    ax.legend(title="Cluster", bbox_to_anchor=(1.01, 1), loc="upper left")
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right", fontsize=7)
     plt.tight_layout()
     plt.show()
