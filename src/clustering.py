@@ -3,7 +3,6 @@ from typing import Iterable, Tuple, List
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import umap
 
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
@@ -105,22 +104,6 @@ def fit_kmeans(
     km = KMeans(n_clusters=k, random_state=random_state, n_init=n_init)
     labels = km.fit_predict(X_std)
     return km, labels
-
-
-def fit_umap_2d(
-    X_std: np.ndarray,
-    n_neighbors: int = 15,
-    min_dist: float = 0.1,
-    random_state: int = 42,
-) -> np.ndarray:
-    reducer = umap.UMAP(
-        n_components=2,
-        n_neighbors=n_neighbors,
-        min_dist=min_dist,
-        random_state=random_state,
-    )
-    return reducer.fit_transform(X_std)
-
 
 
 def profile_clusters_numeric(
