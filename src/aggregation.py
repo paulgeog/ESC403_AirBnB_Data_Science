@@ -5,10 +5,13 @@ def quartiere_standardized_housing(df: pd.DataFrame) -> pd.DataFrame:
     df_q = df.pivot_table(index=["quarlang", "quarsort", "kreissort"],
                           columns=["eigentuemersszpubl1lang", "anzzimmerlevel2lang_nodm"],
                           values="anzwhgstat",
-                          aggfunc="sum"
-                          ).reset_index()
-    
-    df_q = df_q.fillna(0)
+                          aggfunc="sum",
+                          observed=True).reset_index()
+
+    # df_q = df_q.fillna(0) # throws an error on qualrang: TypeError: Cannot setitem on a Categorical with a new category (0), set the categories first (despite it having no NaN)
+    numeric_cols = df_q.select_dtypes(include="number").columns
+    df_q[numeric_cols] = df_q[numeric_cols].fillna(0) # apply only to numerical columns
+
 
     # add total housing stock by room number
     room_types = [
