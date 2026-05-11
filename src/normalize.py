@@ -5,9 +5,12 @@ from typing import Any, Iterable, List, Optional
 import pandas as pd
 
 
-# =========================================================
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
 # Helpers
-# =========================================================
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
 def clean_column_names(data):
     data = data.copy()
     data.columns = (
@@ -106,7 +109,7 @@ def extract_country(x: Any) -> Optional[str]:
 
     country = parts[-1]
 
-    # Known messy values discussed
+    # Known messy values in dataset
     if country in {"NY", "HI"}:
         return country
 
@@ -125,10 +128,12 @@ def contains_zurich(x: Any) -> Optional[bool]:
 def _safe_text_len(series: pd.Series) -> pd.Series:
     return series.fillna("").astype(str).str.len()
 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-# =========================================================
 # Amenity feature helpers
-# =========================================================
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
 def _has_wifi(items: List[str]) -> int:
     return int(any("wifi" in item for item in items))
 
@@ -261,34 +266,29 @@ def _has_heating(items: List[str]) -> int:
 def _has_housekeeping(items: List[str]) -> int:
     return int(any("housekeeping" in item for item in items))
 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-# =========================================================
 # Main function
-# =========================================================
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
 def normalize_airbnb(airbnb_df: pd.DataFrame) -> pd.DataFrame:
     df = airbnb_df.copy()
     df =clean_column_names(df)
 
-    # -------------------------
     # Reference date
-    # -------------------------
     if "calendar_last_scraped" in df.columns and df["calendar_last_scraped"].notna().any():
         reference_date = pd.Timestamp(df["calendar_last_scraped"].dropna().iloc[0])
     else:
         reference_date = pd.Timestamp.today().normalize()
 
-    # -------------------------
     # Text length features before dropping text
-    # -------------------------
-    for col in ["host_about", "description", "neighborhood_overview"]:
+    for col in ["name","host_about", "description", "neighborhood_overview"]:
         if col in df.columns:
             df[f"{col}_len"] = _safe_text_len(df[col])
 
-    # -------------------------
     # Drop noisy/raw columns
-    # -------------------------
     to_drop = [
-        "name",
         "host_name",
         "description",
         "neighborhood_overview",
@@ -311,16 +311,13 @@ def normalize_airbnb(airbnb_df: pd.DataFrame) -> pd.DataFrame:
     ]
     df = df.drop(columns=[c for c in to_drop if c in df.columns], errors="ignore")
 
-    # -------------------------
+
     # Target cleaning
-    # -------------------------
     if "price" in df.columns:
         df = df[df["price"].notna()].copy()
         df["price"] = df["price"].apply(price_to_float)
 
-    # -------------------------
     # Dates -> elapsed days
-    # -------------------------
     date_cols = ["host_since", "first_review", "last_review"]
     for col in date_cols:
         if col in df.columns:
@@ -337,16 +334,12 @@ def normalize_airbnb(airbnb_df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.drop(columns=[c for c in date_cols if c in df.columns], errors="ignore")
 
-    # -------------------------
     # Percent columns
-    # -------------------------
     for col in ["host_response_rate", "host_acceptance_rate"]:
         if col in df.columns:
             df[col] = df[col].apply(pct_to_float)
 
-    # -------------------------
     # Bool-like columns
-    # -------------------------
     bool_cols = [
         "host_is_superhost",
         "host_has_profile_pic",
@@ -357,9 +350,7 @@ def normalize_airbnb(airbnb_df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             df[col] = df[col].apply(tf_to_bool).astype("boolean")
 
-    # -------------------------
     # Host location features
-    # -------------------------
     if "host_location" in df.columns:
         df["host_country"] = df["host_location"].apply(extract_country)
         df["host_country"] = df["host_country"].replace(["NY", "HI"], pd.NA)
@@ -369,9 +360,7 @@ def normalize_airbnb(airbnb_df: pd.DataFrame) -> pd.DataFrame:
 
         df = df.drop(columns=["host_location"], errors="ignore")
 
-    # -------------------------
     # Host verifications
-    # -------------------------
     if "host_verifications" in df.columns:
         verif_lists = df["host_verifications"].apply(parse_list_string)
         df["host_verifications_count"] = verif_lists.apply(len)
@@ -380,9 +369,7 @@ def normalize_airbnb(airbnb_df: pd.DataFrame) -> pd.DataFrame:
         df["host_verif_work_email"] = verif_lists.apply(lambda x: int("work_email" in x))
         df = df.drop(columns=["host_verifications"], errors="ignore")
 
-    # -------------------------
     # Bathrooms
-    # -------------------------
     if "bathrooms_text" in df.columns:
         s = df["bathrooms_text"].astype(str).str.lower()
 
@@ -399,9 +386,7 @@ def normalize_airbnb(airbnb_df: pd.DataFrame) -> pd.DataFrame:
 
         df = df.drop(columns=["bathrooms_text"], errors="ignore")
 
-    # -------------------------
     # Response time as ordered categorical
-    # -------------------------
     if "host_response_time" in df.columns:
         df["host_response_time"] = df["host_response_time"].astype("string").str.strip()
 
@@ -417,9 +402,7 @@ def normalize_airbnb(airbnb_df: pd.DataFrame) -> pd.DataFrame:
             ordered=True,
         )
 
-    # -------------------------
     # Cast selected text cols to category
-    # -------------------------
     cat_cols = [
         "host_country",
         "neighbourhood_cleansed",
@@ -431,9 +414,7 @@ def normalize_airbnb(airbnb_df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             df[col] = df[col].astype("category")
 
-    # -------------------------
     # Amenities -> engineered features
-    # -------------------------
     if "amenities" in df.columns:
         amenities_series = df["amenities"].copy()
         amenity_lists = amenities_series.apply(parse_list_string)
@@ -483,15 +464,24 @@ def normalize_airbnb(airbnb_df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+# Housing Dataset
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 def normalize_housing(housing_df: pd.DataFrame, year: int | None = None) -> pd.DataFrame:
     df = housing_df.copy()
     df = clean_column_names(df)
 
-    # drop columns you explicitly dropped in the notebook
+    # drop datenstandcd as contains the same "D" for all entries and nothing else
     df = df.drop(columns=["datenstandcd"], errors="ignore")
 
-    # categorical columns from the notebook
+    # categorical columns
     cat_cols = [
         "anzzimmerlevel2lang_nodm",
         "eigentuemersszpubl1lang",
@@ -508,6 +498,15 @@ def normalize_housing(housing_df: pd.DataFrame, year: int | None = None) -> pd.D
 
     return df
 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+# Rental dataset
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 def normalize_rental(rental_df: pd.DataFrame,
                      year: int | None = None,
@@ -519,9 +518,7 @@ def normalize_rental(rental_df: pd.DataFrame,
     df = rental_df.copy()
     df = clean_column_names(df)
 
-    # -------------------------
     # time
-    # -------------------------
     if "stichtagdatmonat" in df.columns:
         df["stichtagdatmonat"] = pd.to_datetime(
             df["stichtagdatmonat"].astype(str).str.replace(".", "-", regex=False),
@@ -534,16 +531,12 @@ def normalize_rental(rental_df: pd.DataFrame,
 
     df = df.drop(columns=["stichtagdatjahr", "stichtagdatmonat"], errors="ignore")
 
-    # -------------------------
     # raumeinheit
-    # -------------------------
     if "raumeinheitlang" in df.columns:
         df["raumeinheitlang"] = df["raumeinheitlang"].astype("category")
     # raumeinheitsort will be dropped further down in the code, once it is not needed anymore
 
-    # -------------------------
     # binary columns
-    # -------------------------
     if "gemeinnuetziglang" in df.columns:
         df["is_gemeinnuetzig"] = df["gemeinnuetziglang"].map({
             "Gemeinnützig": True,
@@ -568,9 +561,7 @@ def normalize_rental(rental_df: pd.DataFrame,
 
     df = df.drop(columns=["preisartsort", "preisartlang"], errors="ignore")
 
-    # -------------------------
     # zimmer
-    # -------------------------
     if cat_zimmer == True:
         if "zimmerlang" in df.columns:
             df["zimmerlang"] = (
@@ -585,15 +576,11 @@ def normalize_rental(rental_df: pd.DataFrame,
                 ordered=True,
             )
     df = df.drop(columns=["zimmersort"], errors="ignore")
-    # -------------------------
     # gliederung
-    # -------------------------
     if "gliederunglang" in df.columns:
         gl = df["gliederunglang"].astype("string").str.strip()
 
-    # -------------------------
     # categories
-    # -------------------------
     cat_cols = [
         "raumeinheitlang",
         "zimmerlang",
@@ -609,9 +596,8 @@ def normalize_rental(rental_df: pd.DataFrame,
             df[col] = df[col].astype("category")
 
 
-    # -------------------------
     # apply parameter masks
-    # -------------------------
+    # since it is either april 2024 or april 2022. Combine columns into one.
     if year is not None and "is_april_2024" in df.columns:
         if year == 2024:
             year_bool = True
@@ -629,11 +615,11 @@ def normalize_rental(rental_df: pd.DataFrame,
 
     if level is not None and "raumeinheitsort" in df.columns:
         if level not in range(1,6,1):
-            raise ValueError("Valid leves: 1,2,4,5")
+            raise ValueError("Valid levels: 1,2,4,5")
         df = df[df["raumeinheitsort"] == level]
         df = df[df["gliederungsort"] > 0]
 
-    # remove raumeinheitsort, now that we don't need it anymore for filtering levels
+    # remove raumeinheitsort, now that we split it into several levels
     df = df.drop(columns=["raumeinheitsort"], errors="ignore")
 
     return df
