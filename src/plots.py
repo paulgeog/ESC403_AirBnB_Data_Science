@@ -11,25 +11,27 @@ import folium
 # ------------------------------------------
 
 def plot_price_hist_box(df: pd.DataFrame) -> None:
-    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize = (10,7))
+    fig, ax = plt.subplots(figsize=(8, 4))
 
-    ax1.hist(df["price"], bins = 100)
-    ax1.set_xlabel("price")
-    ax1.set_ylabel("count")
-    ax1.set_title("Histogram 'price' (bin=100)")
+    ax.hist(df["price"], bins=1000)
+    lim=1600
+    ax.set_xlim(0, lim)
+    ax.set_xlabel("Price [CHF/night]")
+    ax.set_ylabel("Count")
+    ax.set_title(f"Distribution of Airbnb listing prices")
 
-    sns.boxplot(ax=ax2, data=df, y="price")
-    ax2.set_title("Boxplot 'price'")
+    median = df["price"].median()
+    q25 = df["price"].quantile(0.25)
+    q75 = df["price"].quantile(0.75)
+    ax.axvline(median, color="red", linestyle="--", linewidth=1.2, label=f"Median: {median:.0f} CHF")
+    ax.axvline(q25, color="orange", linestyle="--", linewidth=1.0, label=f"25th pct: {q25:.0f} CHF")
+    ax.axvline(q75, color="orange", linestyle="--", linewidth=1.0, label=f"75th pct: {q75:.0f} CHF")
+    ax.legend()
 
-    ax3.hist(df["price"], bins = 1000)
-    ax3.set_xlim(0,1000)
-    ax3.set_xlabel("price")
-    ax3.set_ylabel("count")
-    ax3.set_title("Histogram 'price' cropped (bin=1000)")
-
-    sns.boxplot(ax=ax4, data=df, y="price")
-    ax4.set_ylim(0,500)
-    ax4.set_title("Boxplot 'price' cropped")
+    n_cropped = (df["price"] > lim).sum()
+    ax.annotate(f"{n_cropped} listings above {lim:.0f} CHF not shown",
+                xy=(0.98, 0.95), xycoords="axes fraction",
+                ha="right", va="top", fontsize=8, color="grey")
 
     plt.tight_layout()
     plt.show()
@@ -39,7 +41,22 @@ def plot_price_hist_box(df: pd.DataFrame) -> None:
 # 4.4. Comparing rental prices and housing stock variance
 # ------------------------------------------
 
-def plot_multiple_boxplot(df: pd.DataFrame, cols: list, col_names: list, ylim_min: float, ylim_max: float, title: str = None, grid: bool = False) -> None:
+def plot_multiple_violinplot(df: pd.DataFrame, cols: list, col_names: list, ylim_min: float, ylim_max: float, title: str = None, ylabel: str = None, grid: bool = False) -> None:
+    plot_width = len(cols) * 1.57 + 1
+    fig, ax = plt.subplots(figsize=(plot_width, 4))
+    sns.violinplot(ax=ax, data=df[cols], order=cols, inner="box", cut=0)
+    ax.set_xticks(range(len(cols)))
+    ax.set_xticklabels(col_names)
+    ax.set_ylim(ylim_min, ylim_max)
+    ax.set_title(title)
+    ax.set_ylabel(ylabel)
+    if grid:
+        plt.grid(zorder=0, alpha=0.4)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_multiple_boxplot(df: pd.DataFrame, cols: list, col_names: list, ylim_min: float, ylim_max: float, title: str = None, ylabel: str = None, grid: bool = False) -> None:
     plot_width = len(cols) * 1.57 + 1
     fig, ax = plt.subplots(figsize=(plot_width,4))
     sns.boxplot(ax=ax, data=df[cols],
@@ -49,6 +66,7 @@ def plot_multiple_boxplot(df: pd.DataFrame, cols: list, col_names: list, ylim_mi
     ax.set_xticklabels(col_names)
     ax.set_ylim(ylim_min,ylim_max)
     ax.set_title(title)
+    ax.set_ylabel(ylabel)
     if grid == True:
         plt.grid(zorder=0,
                  alpha=0.4)
@@ -66,7 +84,8 @@ def prepare_corr_df(df: pd.DataFrame) -> pd.DataFrame:
     bool_cols = df.select_dtypes(include="bool").columns
     df[bool_cols] = df[bool_cols].fillna(False).astype(int)
 
-    df = df.iloc[:, :-30].select_dtypes(include="number")
+    amenity_cols = [c for c in df.columns if c.startswith("amenity_")]
+    df = df.drop(columns=amenity_cols).select_dtypes(include="number")
 
     drop_cols = [
         "latitude", "longitude", "host_total_listings_count",
@@ -84,6 +103,30 @@ def prepare_corr_df(df: pd.DataFrame) -> pd.DataFrame:
     ]
 
     return df.drop(columns=drop_cols, errors="ignore")
+
+def plot_amenity_price_corr(df: pd.DataFrame) -> None:
+    amenity_cols = [c for c in df.columns if c.startswith("amenity_")]
+    corrs = (
+        df[amenity_cols]
+        .corrwith(df["price"])
+        .rename(lambda c: c.replace("amenity_", ""))
+    )
+    count_corr = df["amenities_count"].corr(df["price"])
+    corrs["total count"] = count_corr
+    corrs = corrs.sort_values()
+
+    colors = ["#d9534f" if v < 0 else "#5b9bd5" for v in corrs]
+    colors[list(corrs.index).index("total count")] = "#2ca02c"
+
+    fig, ax = plt.subplots(figsize=(7, len(corrs) * 0.35 + 1))
+    ax.barh(corrs.index, corrs.values, color=colors)
+    ax.axvline(0, color="black", linewidth=0.8)
+    ax.set_xlabel("Pearson correlation with price")
+    ax.set_title("Correlation between amenities and listing price")
+    ax.grid(axis="x", alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
 
 # creating the correlation matrix
 def plot_corr_heatmap(df: pd.DataFrame) -> None:
