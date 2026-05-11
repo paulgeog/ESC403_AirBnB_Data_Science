@@ -289,6 +289,7 @@ def normalize_airbnb(airbnb_df: pd.DataFrame) -> pd.DataFrame:
 
     # Drop noisy/raw columns
     to_drop = [
+        "name",
         "host_name",
         "description",
         "neighborhood_overview",
