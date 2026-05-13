@@ -4,6 +4,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 import re
+import statsmodels.api as sm
+from statsmodels.graphics.gofplots import ProbPlot
+from statsmodels.stats.outliers_influence import OLSInfluence
+
 import folium
 
 # ------------------------------------------
@@ -233,10 +237,6 @@ def plot_per_quartier(df: gpd.GeoDataFrame, column: str, title: str, ylabel: str
         plt.grid(zorder=0)
     plt.tight_layout()
     plt.show()
-
-
-
-
 
 
 # ===========================================================
