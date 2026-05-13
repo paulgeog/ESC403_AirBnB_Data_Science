@@ -8,9 +8,77 @@ import statsmodels.api as sm
 from statsmodels.graphics.gofplots import ProbPlot
 from statsmodels.stats.outliers_influence import OLSInfluence
 
+import folium
 
 # ------------------------------------------
-# 4.1.4. Correlation Matrix
+# 4.1.1. Airbnb/ Price
+# ------------------------------------------
+
+def plot_price_hist_box(df: pd.DataFrame) -> None:
+    fig, ax = plt.subplots(figsize=(8, 4))
+
+    ax.hist(df["price"], bins=1000)
+    lim=1600
+    ax.set_xlim(0, lim)
+    ax.set_xlabel("Price [CHF/night]")
+    ax.set_ylabel("Count")
+    ax.set_title(f"Distribution of Airbnb listing prices")
+
+    median = df["price"].median()
+    q25 = df["price"].quantile(0.25)
+    q75 = df["price"].quantile(0.75)
+    ax.axvline(median, color="red", linestyle="--", linewidth=1.2, label=f"Median: {median:.0f} CHF")
+    ax.axvline(q25, color="orange", linestyle="--", linewidth=1.0, label=f"25th pct: {q25:.0f} CHF")
+    ax.axvline(q75, color="orange", linestyle="--", linewidth=1.0, label=f"75th pct: {q75:.0f} CHF")
+    ax.legend()
+
+    n_cropped = (df["price"] > lim).sum()
+    ax.annotate(f"{n_cropped} listings above {lim:.0f} CHF not shown",
+                xy=(0.98, 0.95), xycoords="axes fraction",
+                ha="right", va="top", fontsize=8, color="grey")
+
+    plt.tight_layout()
+    plt.show()
+
+# ------------------------------------------
+# 4.1.2. Airbnb/ Reviews
+# 4.4. Comparing rental prices and housing stock variance
+# ------------------------------------------
+
+def plot_multiple_violinplot(df: pd.DataFrame, cols: list, col_names: list, ylim_min: float, ylim_max: float, title: str = None, ylabel: str = None, grid: bool = False) -> None:
+    plot_width = len(cols) * 1.57 + 1
+    fig, ax = plt.subplots(figsize=(plot_width, 4))
+    sns.violinplot(ax=ax, data=df[cols], order=cols, inner="box", cut=0)
+    ax.set_xticks(range(len(cols)))
+    ax.set_xticklabels(col_names)
+    ax.set_ylim(ylim_min, ylim_max)
+    ax.set_title(title)
+    ax.set_ylabel(ylabel)
+    if grid:
+        plt.grid(zorder=0, alpha=0.4)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_multiple_boxplot(df: pd.DataFrame, cols: list, col_names: list, ylim_min: float, ylim_max: float, title: str = None, ylabel: str = None, grid: bool = False) -> None:
+    plot_width = len(cols) * 1.57 + 1
+    fig, ax = plt.subplots(figsize=(plot_width,4))
+    sns.boxplot(ax=ax, data=df[cols],
+                order=cols
+                )
+    ax.set_xticks(range(len(cols)))
+    ax.set_xticklabels(col_names)
+    ax.set_ylim(ylim_min,ylim_max)
+    ax.set_title(title)
+    ax.set_ylabel(ylabel)
+    if grid == True:
+        plt.grid(zorder=0,
+                 alpha=0.4)
+    plt.tight_layout()
+    plt.show()
+
+# ------------------------------------------
+# 4.1.4. Airbnb/ Correlation Matrix
 # ------------------------------------------
 
 # function for prepping the dataset
@@ -20,7 +88,8 @@ def prepare_corr_df(df: pd.DataFrame) -> pd.DataFrame:
     bool_cols = df.select_dtypes(include="bool").columns
     df[bool_cols] = df[bool_cols].fillna(False).astype(int)
 
-    df = df.iloc[:, :-30].select_dtypes(include="number")
+    amenity_cols = [c for c in df.columns if c.startswith("amenity_")]
+    df = df.drop(columns=amenity_cols).select_dtypes(include="number")
 
     drop_cols = [
         "latitude", "longitude", "host_total_listings_count",
@@ -38,6 +107,30 @@ def prepare_corr_df(df: pd.DataFrame) -> pd.DataFrame:
     ]
 
     return df.drop(columns=drop_cols, errors="ignore")
+
+def plot_amenity_price_corr(df: pd.DataFrame) -> None:
+    amenity_cols = [c for c in df.columns if c.startswith("amenity_")]
+    corrs = (
+        df[amenity_cols]
+        .corrwith(df["price"])
+        .rename(lambda c: c.replace("amenity_", ""))
+    )
+    count_corr = df["amenities_count"].corr(df["price"])
+    corrs["total count"] = count_corr
+    corrs = corrs.sort_values()
+
+    colors = ["#d9534f" if v < 0 else "#5b9bd5" for v in corrs]
+    colors[list(corrs.index).index("total count")] = "#2ca02c"
+
+    fig, ax = plt.subplots(figsize=(7, len(corrs) * 0.35 + 1))
+    ax.barh(corrs.index, corrs.values, color=colors)
+    ax.axvline(0, color="black", linewidth=0.8)
+    ax.set_xlabel("Pearson correlation with price")
+    ax.set_title("Correlation between amenities and listing price")
+    ax.grid(axis="x", alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
 
 # creating the correlation matrix
 def plot_corr_heatmap(df: pd.DataFrame) -> None:
@@ -70,7 +163,7 @@ def plot_corr_heatmap(df: pd.DataFrame) -> None:
     plt.show()
 
 # ------------------------------------------
-# 4.2.1. Box Plot and  Stacked Bar Chart
+# 4.2.1. Housing Stock/ Box Plot and  Stacked Bar Chart
 # ------------------------------------------
 
 # restructure df to get columns by number of rooms
@@ -125,8 +218,8 @@ def box_and_stacked_housing_stock(df: pd.DataFrame) -> pd.DataFrame:
     plt.show()
 
 # ------------------------------------------
-# 4.2.2. Airbnbs per square kilometer
-# 4.3.1. Price for each quartier
+# 4.2.2. Housing Stock/ Airbnbs per square kilometer
+# 4.3.1. Rental Prices/ Price for each quartier
 # ------------------------------------------
 
 def plot_per_quartier(df: gpd.GeoDataFrame, column: str, title: str, ylabel: str, grid: bool = False) -> None:
@@ -146,127 +239,179 @@ def plot_per_quartier(df: gpd.GeoDataFrame, column: str, title: str, ylabel: str
     plt.show()
 
 
+# ===========================================================
+# ===========Clustering pipeline (Chapter 5)=================
+# ===========================================================
 # ------------------------------------------
-# 5.3. linear regression
+# 5.4. K-Means sweep (elbow + silhouette)
 # ------------------------------------------
+def plot_kmeans_sweep(
+    sweep_a: pd.DataFrame,
+    sweep_b: pd.DataFrame,
+    labels: tuple[str, str],
+) -> None:
+    # 2x2 grid: top row inertia (elbow), bottom row silhouette; left col = sweep_a, right col = sweep_b
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
 
-def plot_fit_resid(X: pd.DataFrame, y: pd.DataFrame) -> None:
-    # linear regression model
-    # model
-    reg = sm.OLS(y, X).fit()
-    # -------------------------------------------
-    # parameter calculation
-    X2 = X["airbnb_density"]
-    infl = OLSInfluence(reg)
-    fitted = reg.fittedvalues
-    resid = reg.resid
-    resid_norm = reg.get_influence().resid_studentized_internal
-    resid_abs_norm_sqr = np.sqrt(np.abs(resid_norm))
-    resid_abs = np.abs(resid)
-    resid_stud = infl.resid_studentized_internal.to_numpy()
-    leverage = infl.hat_matrix_diag
-    cooks = infl.cooks_distance[0]
-    inter, s = reg.params
-    line = s * X + inter
-    # -------------------------------------------
-    # plot setup
-    fig, axs = plt.subplots(1,5, figsize=(18, 4))
-    # -------------------------------------------
-    # scatter plot of regression line
-    axs[0].scatter(X2,y,
-                   marker="o",
-                   s=25,
-                   facecolors="none",
-                   edgecolors="grey")
-    axs[0].plot(X2, line, lw=1, color='red', alpha=0.8)
-    axs[0].set_xlabel("Predictor")
-    x_pad = 0.05 * (max(X2) - min(X2))
-    y_pad = 0.05 * (max(y) - min(y))
-    axs[0].set_xlim(min(X2) - x_pad, max(X2) + x_pad)
-    axs[0].set_ylim(min(y) - y_pad, max(y) + y_pad)
-    axs[0].set_ylabel("Response")
-    axs[0].set_title("1) Linear Regression Model")
-    # -------------------------------------------
-    # Residuals vs. fitted plot
-    sns.residplot(x=fitted,
-                  y=resid,
-                  lowess=True,
-                  scatter_kws={
-                      "marker": "o",
-                      "s":25,
-                      "facecolors": "none",
-                      "edgecolors": "grey"
-                      },
-                  line_kws={
-                      'color': 'red',
-                      'lw': 1,
-                      'alpha': 0.8
-                      },
-                  ax=axs[1])
-    axs[1].axhline(0,
-                   color="darkgrey",
-                   linewidth=1,
-                   linestyle="--")
-    axs[1].set_xlabel("Fitted values")
-    axs[1].set_ylabel("Residuals")
-    axs[1].set_title("2) Residuals vs Fitted")
-    # -------------------------------------------
-    # Normal Q-Q Plot
-    QQ = ProbPlot(resid_norm)
-    QQ.qqplot(line='45',
-                          lw=1,
-                          marker="o",
-                          markersize=5,
-                          markerfacecolor="none",
-                          markeredgecolor="grey",
-                          ax=axs[2])
-    axs[2].lines[1].set_alpha(0.8)
-    axs[2].set_xlabel("Theoretical Quantiles")
-    axs[2].set_ylabel("Standardized Residuals")
-    axs[2].set_title("3) Normal Q-Q")
-    # -------------------------------------------
-    # Scale-Location
-    axs[3].scatter(fitted,resid_abs_norm_sqr,
-                   marker="o",
-                   s=25,
-                   facecolors="none",
-                   edgecolors="grey")
-    sns.regplot(x=fitted, y=resid_abs_norm_sqr,
-              scatter=False,
-              ci=False,
-              lowess=True,
-              line_kws={"color": "red", "lw": 1, "alpha": 0.8},
-              ax=axs[3])
-    axs[3].set_xlabel("Fitted values")
-    axs[3].set_ylabel(r"$\sqrt{|Standardized Residuals|}$")
-    axs[3].set_title("4) Scale-Location")
-    # -------------------------------------------
-    # Residuals vs. Leverage
-    threshold = 4 / len(fitted)
-    influential_points = np.where(cooks > threshold)[0]
+    for col, sweep, label in zip([0, 1], [sweep_a, sweep_b], labels):
+        ax_elbow = axes[0][col]
+        ax_sil   = axes[1][col]
 
-    axs[4].scatter(
-        leverage,
-        resid_stud,
-        s=80 * cooks,
-        marker="o",
-        facecolors="none",
-        edgecolors="grey"
-    )
-    if influential_points.size > 0:
-        for i in influential_points:
-            axs[4].annotate(i, (leverage[i], resid_stud[i]))
-    axs[4].set_xlabel("Leverage")
-    axs[4].set_ylabel("Studentized Residuals")
-    axs[4].set_title("5) Influence Plot")
+        ax_elbow.plot(sweep["k"], sweep["inertia"], "o-")
+        ax_elbow.set_title(f"Elbow — {label}")
+        ax_elbow.set_xlabel("k")
+        ax_elbow.set_ylabel("Inertia")
+        ax_elbow.grid(alpha=0.3)
 
-    
-    
+        ax_sil.plot(sweep["k"], sweep["silhouette"], "o-", color="orange")
+        ax_sil.set_title(f"Silhouette — {label}")
+        ax_sil.set_xlabel("k")
+        ax_sil.set_ylabel("Silhouette score")
+        ax_sil.grid(alpha=0.3)
 
     plt.tight_layout()
     plt.show()
 
 
+# ------------------------------------------
+# 5.4. / 5.5. Cluster scatter in 2D space (PCA or UMAP)
+# ------------------------------------------
+def plot_clusters_2d(
+    X_a: np.ndarray, labels_a: np.ndarray,
+    X_b: np.ndarray, labels_b: np.ndarray,
+    titles: tuple[str, str],
+    axis_labels: tuple[str, str] = ("Component 1", "Component 2"),
+) -> None:
+    # Side-by-side 2D scatter of two cluster solutions, colored by label
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+    for ax, X, labels, title in zip(axes, [X_a, X_b], [labels_a, labels_b], titles):
+        for cluster_id in np.unique(labels):
+            mask = labels == cluster_id
+            ax.scatter(X[mask, 0], X[mask, 1], s=10, alpha=0.7, label=f"Cluster {cluster_id}")
+        ax.set_title(title)
+        ax.set_xlabel(axis_labels[0])
+        ax.set_ylabel(axis_labels[1])
+        ax.legend(markerscale=2, fontsize=8)
+
+    plt.tight_layout()
+    plt.show()
 
 
+# ------------------------------------------
+# 5.6. Cluster review heatmap
+# ------------------------------------------
+def plot_cluster_review_heatmap(
+    profile: pd.DataFrame,
+    review_cols: list[str],
+    title: str,
+) -> None:
+    # Heatmap of cluster x review-dimension means
+    data = profile[review_cols]
+    fig, ax = plt.subplots(figsize=(len(review_cols) * 1.2 + 1, len(data) * 0.8 + 1))
+    sns.heatmap(
+        data,
+        ax=ax,
+        annot=True,
+        fmt=".2f",
+        cmap="YlOrRd",
+        linewidths=0.5,
+        cbar_kws={"label": "Mean score"},
+    )
+    ax.set_title(title)
+    ax.set_ylabel("Cluster")
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=30, ha="right")
+    plt.tight_layout()
+    plt.show()
 
+
+# ------------------------------------------
+# 5.7. Geographic distribution of clusters
+# ------------------------------------------
+def zurich_map_clusters(
+    airbnb_gdf: "gpd.GeoDataFrame",
+    forest: "gpd.GeoDataFrame",
+    quartiere: "gpd.GeoDataFrame",
+    cluster_col: str,
+    title: str = "",
+) -> "folium.Map":
+    # Folium map of listings colored by cluster label
+    # Mirrors the structure of zurich_map_eda() in src/maps.py
+    # (forest layer, quartier borders, listings layer, layer control)
+    # Uses categorical color per cluster instead of log-price colormap
+    PALETTE = {0: "#4C72B0", 1: "#DD8452", 2: "#55A868", 3: "#C44E52", 4: "#8172B3"}
+
+    m = folium.Map(
+        location=[47.3769, 8.5417],
+        zoom_start=12,
+        min_zoom=12,
+        max_zoom=17,
+        tiles="CartoDB dark-matter",
+    )
+
+    folium.GeoJson(forest, name="Forested areas",
+                   style_function=lambda x: {"color": "green", "weight": 1,
+                                             "opacity": 0.5, "fillOpacity": 0.2}
+                   ).add_to(m)
+
+    folium.GeoJson(quartiere, name="Quartier borders",
+                   style_function=lambda x: {"color": "white", "weight": 1,
+                                             "opacity": 0.7, "fillOpacity": 0},
+                   tooltip=folium.GeoJsonTooltip(fields=["qname"], aliases=["Quartier:"])
+                   ).add_to(m)
+
+    listings_layer = folium.FeatureGroup(name="Airbnb Listings")
+    for _, row in airbnb_gdf.iterrows():
+        color = PALETTE.get(int(row[cluster_col]), "#999999")
+        folium.CircleMarker(
+            location=[row.geometry.y, row.geometry.x],
+            radius=3,
+            stroke=False,
+            fill=True,
+            fill_color=color,
+            fill_opacity=1,
+            tooltip=f"Cluster {int(row[cluster_col])}",
+        ).add_to(listings_layer)
+    listings_layer.add_to(m)
+
+    legend_items = "".join(
+        f'<i style="background:{PALETTE[k]};width:10px;height:10px;display:inline-block;margin-right:4px"></i>Cluster {k}<br>'
+        for k in sorted(PALETTE)
+    )
+    legend_html = f"""
+    <div style="position:fixed;bottom:50px;left:50px;z-index:9999;
+                background-color:rgba(0,0,0,0.7);color:white;padding:10px;
+                border-radius:6px;font-size:14px;">
+    <b>{title}</b><br>{legend_items}
+    </div>"""
+    m.get_root().html.add_child(folium.Element(legend_html))
+
+    folium.LayerControl().add_to(m)
+    return m
+
+
+def plot_cluster_share_per_quartier(
+    df: pd.DataFrame,
+    cluster_col: str,
+    quartier_col: str,
+    title: str,
+) -> None:
+    # Stacked bar chart: x=quartier, y=share (%), stacks=cluster
+    counts = (
+        df.groupby([quartier_col, cluster_col])
+        .size()
+        .unstack(fill_value=0)
+    )
+    shares = counts.div(counts.sum(axis=1), axis=0) * 100
+    shares = shares.sort_index()
+
+    fig, ax = plt.subplots(figsize=(14, 5))
+    shares.plot(kind="bar", stacked=True, ax=ax, colormap="tab10", width=0.85)
+    ax.set_xlabel("")
+    ax.set_ylabel("Share (%)")
+    ax.set_ylim(0, 100)
+    ax.set_title(title)
+    ax.legend(title="Cluster", bbox_to_anchor=(1.01, 1), loc="upper left")
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right", fontsize=7)
+    plt.tight_layout()
+    plt.show()
