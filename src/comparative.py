@@ -8,6 +8,8 @@ from statsmodels.graphics.gofplots import ProbPlot
 from statsmodels.stats.outliers_influence import OLSInfluence
 from shapely.geometry import Point
 from scipy import stats
+import libpysal
+from esda.moran import Moran
 
 
 # ------------------------------------------
@@ -132,6 +134,45 @@ def plot_fit_resid(X: pd.DataFrame, y: pd.DataFrame) -> None:
 
     print(reg.summary())
 
+# ------------------------------------------
+# 5.3.3. Analysis with CI
+# ------------------------------------------
+def bootstrap_ols(X, y, n_boot=10000, ci=95, seed=42):
+    rng = np.random.default_rng(seed)
+    n = len(y)
+    boot_coefs = np.empty((n_boot, X.shape[1]))
+    boot_r2 = np.empty(n_boot)
+
+    for i in range(n_boot):
+        idx = rng.integers(0, n, size=n)
+        model = sm.OLS(y.iloc[idx], X.iloc[idx]).fit()
+        boot_coefs[i] = model.params
+        boot_r2[i] = model.rsquared
+
+    lower = (100 - ci) / 2
+    upper = 100 - lower
+
+    ci_coefs = np.percentile(boot_coefs, [lower, upper], axis=0)
+    ci_r2 = np.percentile(boot_r2, [lower, upper])
+
+    return boot_coefs, boot_r2, ci_coefs, ci_r2
+
+
+# ------------------------------------------
+# 5.3.4. Moran's I
+# ------------------------------------------
+def get_morans_weights(gdf: gpd.GeoDataFrame):
+    w = libpysal.weights.KNN.from_dataframe(gdf, use_index=True, k=8)
+    w.transform = "r"
+    return w
+
+def moran(X, y, w):
+    model = sm.OLS(y, X).fit()
+    residuals = model.resid
+
+    moran = Moran(residuals, w)  
+    print(f"Moran's I: {moran.I}")
+    print(f"P-Value: {moran.p_sim}")
 
 # ------------------------------------------
 # 5.4.1. calculating distance
@@ -144,17 +185,10 @@ def get_center_gdf(gdf: gpd.GeoDataFrame, center_data: dict):
 
     # get central points for each quartier
     gdf["geometry_center"] = gdf.representative_point()
-
-    # convert to GeoSeries with geometry type as points, not polygons
-    gdf = gpd.GeoDataFrame(
-        gdf,
-        geometry="geometry_center",
-        crs="EPSG:2056"
-    )
     
     # calculate distances to different CBDs
     for i, row in center_gdf.iterrows():
-        gdf[f"dist_{row['name']}"] = (gdf.geometry.distance(row.geometry))
+        gdf[f"dist_{row['name']}"] = (gdf["geometry_center"].distance(row.geometry))
     
     return gdf
 
@@ -169,8 +203,24 @@ def get_residuals(y, x):
     model = sm.OLS(y, X).fit()
     return model.resid
 
+# helper function for bootstrapping
+def bootstrap_r(x, y, n_boot=10000, ci=95, seed=42):
+    rng = np.random.default_rng(seed)
+    n = len(x)
+    boot_r = np.empty(n_boot)
+    
+    for i in range(n_boot):
+        idx = rng.integers(0, n, size=n)
+        boot_r[i] = stats.pearsonr(x[idx], y[idx])[0]
+    
+    lower = (100 - ci) / 2
+    upper = 100 - lower
+    ci_low, ci_high = np.percentile(boot_r, [lower, upper])
+    
+    return boot_r, ci_low, ci_high
+
 # calculating partial correlations
-def get_part_corr(gdf: gpd.GeoDataFrame, y1_col: str, y2_col: str, naive_r: float, naive_p: float) -> pd.DataFrame:
+def get_part_corr(gdf: gpd.GeoDataFrame, y1_col: str, y2_col: str, naive_r: float, naive_p: float, n_boot: int = 10000) -> pd.DataFrame:
     center_definitions = {
         "Hauptbahnhof": "dist_hb",
         "Paradeplatz":  "dist_paradeplatz",
@@ -187,10 +237,13 @@ def get_part_corr(gdf: gpd.GeoDataFrame, y1_col: str, y2_col: str, naive_r: floa
         resid_airbnb = get_residuals(gdf[y2_col], dist)
         
         partial_r, partial_p = stats.pearsonr(resid_rent, resid_airbnb)
-        
+        _, ci_low, ci_high = bootstrap_r(resid_rent, resid_airbnb, n_boot=n_boot)
+
         results.append({
             "Center Definition": label,
             "Partial r":         round(partial_r, 3),
+            "Partial r²":        round(partial_r**2, 3),
+            "95% CI (r²)":       f"[{ci_low**2:.2f}, {ci_high**2:.2f}]",
             "p-value":           round(partial_p, 4),
             "Significant":       partial_p < 0.05,
         })
@@ -208,32 +261,57 @@ def get_part_corr(gdf: gpd.GeoDataFrame, y1_col: str, y2_col: str, naive_r: floa
 # 5.4.3. Visualisation
 # ------------------------------------------
 
-def plot_bar_r(naive_r: float, results: pd.DataFrame) -> None:
-    center_definitions = {
-        "Hauptbahnhof": "dist_hb",
-        "Paradeplatz":  "dist_paradeplatz",
-        "Bellevue":     "dist_bellevue",
-        "Grossmünster": "dist_grossmunster",
-    }
-
+def plot_bar_r(naive_r: float, naive_ci_low_r2: float, naive_ci_high_r2: float, results: list) -> None:
     fig, ax = plt.subplots(figsize=(8, 5))
 
-    labels = ["Naive"] + list(center_definitions.keys())
-    r_values = [naive_r] + [r["Partial r"] for r in results]
+    labels    = ["Naive"] + [r["Center Definition"] for r in results]
+    r2_values = [naive_r**2] + [r["Partial r²"] for r in results]
+    ci_lows   = [naive_ci_low_r2]  + [float(r["95% CI (r²)"].strip("[]").split(",")[0]) for r in results]
+    ci_highs  = [naive_ci_high_r2] + [float(r["95% CI (r²)"].strip("[]").split(",")[1]) for r in results]
+
     colors = ["steelblue"] + ["crimson"] * 4
+    bars = ax.bar(labels, r2_values, color=colors, alpha=0.8, edgecolor="k", linewidth=0.5)
 
-    bars = ax.bar(labels, r_values, color=colors, alpha=0.8, edgecolor="k", linewidth=0.5)
+    for i, (bar, val) in enumerate(zip(bars, r2_values)):
+        ci_l, ci_h = ci_lows[i], ci_highs[i]
 
-    # Add value labels on top of bars
-    for bar, val in zip(bars, r_values):
-        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01,
-                f"{val:.3f}", ha="center", va="bottom", fontsize=9)
+        # error bars
+        ax.errorbar(
+            bar.get_x() + bar.get_width() / 2, val,
+            yerr=[[val - ci_l], [ci_h - val]],
+            fmt="none", color="black", capsize=4, linewidth=1.5
+        )
+        # r² value on top of bar
+        ax.text(
+            bar.get_x() + bar.get_width() / 2 - 0.2,
+            bar.get_height() + 0.02,
+            f"{val:.3f}",
+            ha="center", va="bottom", fontsize=9, fontweight="bold"
+        )
+        # lower CI at bottom of error bar
+        if colors[i] == "steelblue":
+            ci_col = "black"
+        else:
+            ci_col = "white"
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            ci_l - 0.02,
+            f"{ci_l:.2f}",
+            ha="center", va="top", fontsize=7, color=ci_col
+        )
+        # upper CI at top of error bar
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            ci_h + 0.02,
+            f"{ci_h:.2f}",
+            ha="center", va="bottom", fontsize=7, color="black"
+        )
 
     ax.set_ylim(0, 1)
-    ax.axhline(naive_r, color="steelblue", linewidth=1, linestyle="--", alpha=0.5)
-    ax.set_ylabel("Pearson r")
+    ax.axhline(naive_r**2, color="steelblue", linewidth=1, linestyle="--", alpha=0.5)
+    ax.set_ylabel("Pearson r²")
     ax.set_title("Naive vs. Partial Correlation\n(Airbnb Density ~ Rent, controlling for distance to center)")
-    ax.tick_params(axis="x", rotation=15)
-
+    ax.tick_params(axis="x")
+    ax.set_xlabel("Different definitions for city center")
     plt.tight_layout()
     plt.show()
