@@ -22,7 +22,7 @@ def plot_fit_resid(X: pd.DataFrame, y: pd.DataFrame) -> None:
     reg = sm.OLS(y, X).fit()
     # -------------------------------------------
     # parameter calculation
-    X2 = X["airbnb_density"]
+    X2 = X.iloc[:, 1]  # grabs first predictor column, skipping the constant
     infl = OLSInfluence(reg)
     fitted = reg.fittedvalues
     resid = reg.resid
@@ -32,8 +32,6 @@ def plot_fit_resid(X: pd.DataFrame, y: pd.DataFrame) -> None:
     resid_stud = infl.resid_studentized_internal.to_numpy()
     leverage = infl.hat_matrix_diag
     cooks = infl.cooks_distance[0]
-    inter, s = reg.params
-    line = s * X + inter
     # -------------------------------------------
     # plot setup
     fig, axs = plt.subplots(1,5, figsize=(18, 4))
@@ -44,7 +42,9 @@ def plot_fit_resid(X: pd.DataFrame, y: pd.DataFrame) -> None:
                    s=25,
                    facecolors="none",
                    edgecolors="grey")
-    axs[0].plot(X2, line, lw=1, color='red', alpha=0.8)
+    sort_idx = X2.argsort()
+    axs[0].plot(X2.iloc[sort_idx], reg.fittedvalues.iloc[sort_idx], lw=1, color='red', alpha=0.8)
+    #axs[0].plot(X2, reg.fittedvalues, lw=1, color='red', alpha=0.8)
     axs[0].set_xlabel("Predictor")
     x_pad = 0.05 * (max(X2) - min(X2))
     y_pad = 0.05 * (max(y) - min(y))
