@@ -43,8 +43,8 @@ def plot_fit_resid(X: pd.DataFrame, y: pd.DataFrame) -> None:
                    facecolors="none",
                    edgecolors="grey")
     sort_idx = X2.argsort()
-    axs[0].plot(X2.iloc[sort_idx], reg.fittedvalues.iloc[sort_idx], lw=1, color='red', alpha=0.8)
-    #axs[0].plot(X2, reg.fittedvalues, lw=1, color='red', alpha=0.8)
+    axs[0].plot(X2.iloc[sort_idx], reg.fittedvalues.iloc[sort_idx], lw=1, color='crimson', alpha=0.8)
+    #axs[0].plot(X2, reg.fittedvalues, lw=1, color='crimson', alpha=0.8)
     axs[0].set_xlabel("Predictor")
     x_pad = 0.05 * (max(X2) - min(X2))
     y_pad = 0.05 * (max(y) - min(y))
@@ -64,7 +64,7 @@ def plot_fit_resid(X: pd.DataFrame, y: pd.DataFrame) -> None:
                       "edgecolors": "grey"
                       },
                   line_kws={
-                      'color': 'red',
+                      'color': 'crimson',
                       'lw': 1,
                       'alpha': 0.8
                       },
@@ -101,7 +101,7 @@ def plot_fit_resid(X: pd.DataFrame, y: pd.DataFrame) -> None:
               scatter=False,
               ci=False,
               lowess=True,
-              line_kws={"color": "red", "lw": 1, "alpha": 0.8},
+              line_kws={"color": "crimson", "lw": 1, "alpha": 0.8},
               ax=axs[3])
     axs[3].set_xlabel("Fitted values")
     axs[3].set_ylabel(r"$\sqrt{|Standardized Residuals|}$")
@@ -255,7 +255,6 @@ def get_part_corr(gdf: gpd.GeoDataFrame, y1_col: str, y2_col: str, naive_r: floa
     results_df = pd.DataFrame(results)
     print("Summary")
     print(f"  Naive r:  {naive_r:.3f} (p = {naive_p:.4f})")
-    print(results_df.to_string(index=False))
     return results_df, residuals  # now returns both
 
 # ------------------------------------------
@@ -267,15 +266,20 @@ def plot_partial_corr(results_df: pd.DataFrame, residuals: dict, y1_col: str, y2
     fig, axs = plt.subplots(n, 3, figsize=(20, 5 * n))
     fig.suptitle("Partial Correlations by City Center", fontsize=14, y=1.01)
 
-    def draw_panel(ax, x_vals, y_vals, x_label, y_label):
+    def draw_panel(ax, x_vals, y_vals, x_label, y_label, show_zero_lines=False):
         X = sm.add_constant(x_vals)
         model = sm.OLS(y_vals, X).fit()
         fitted = np.array(model.fittedvalues)
         x_sorted = np.sort(x_vals)
 
+        # zero reference lines for residual plots
+        if show_zero_lines:
+            ax.axhline(0, color='grey', lw=0.8, linestyle='--', alpha=0.4, zorder=1)
+            ax.axvline(0, color='grey', lw=0.8, linestyle='--', alpha=0.4, zorder=1)
+
         # residual lines
         for xi, yi, fi in zip(x_vals, y_vals, fitted):
-            ax.plot([xi, xi], [yi, fi], color='red', lw=0.8, alpha=0.6)
+            ax.plot([xi, xi], [yi, fi], color='crimson', lw=0.8, alpha=0.6)
 
         # scatter points
         ax.scatter(x_vals, y_vals, marker='o', s=25,
@@ -289,7 +293,7 @@ def plot_partial_corr(results_df: pd.DataFrame, residuals: dict, y1_col: str, y2
         ax.set_ylabel(y_label)
 
     for row, (label, data) in enumerate(residuals.items()):
-        partial_r = results_df.loc[results_df["Center Definition"] == label, "Partial r"].values[0]
+        partial_r2 = results_df.loc[results_df["Center Definition"] == label, "Partial r²"].values[0]
 
         draw_panel(axs[row, 0], data["dist"], data["y1"],
                    x_label=f"Distance to {label} (m)", y_label=y1_col)
@@ -301,8 +305,18 @@ def plot_partial_corr(results_df: pd.DataFrame, residuals: dict, y1_col: str, y2
 
         draw_panel(axs[row, 2], data["resid_y2"], data["resid_y1"],
                    x_label=f"Residuals ({y2_col} ~ distance)",
-                   y_label=f"Residuals ({y1_col} ~ distance)")
-        axs[row, 2].set_title(f"{label} — Partial r = {partial_r:.3f}")
+                   y_label=f"Residuals ({y1_col} ~ distance)", show_zero_lines=True)
+        axs[row, 2].set_title(f"{label} — Partial r² = {partial_r2:.3f}")
+
+    # sync axes limits column by column
+    for col in range(3):
+        x_min = min(axs[row, col].get_xlim()[0] for row in range(n))
+        x_max = max(axs[row, col].get_xlim()[1] for row in range(n))
+        y_min = min(axs[row, col].get_ylim()[0] for row in range(n))
+        y_max = max(axs[row, col].get_ylim()[1] for row in range(n))
+        for row in range(n):
+            axs[row, col].set_xlim(x_min, x_max)
+            axs[row, col].set_ylim(y_min, y_max)
 
     plt.tight_layout()
     plt.show()
@@ -319,7 +333,7 @@ def plot_bar_r(naive_r: float, naive_ci_low_r2: float, naive_ci_high_r2: float, 
     ci_lows   = [naive_ci_low_r2]  + [float(r["95% CI (r²)"].strip("[]").split(",")[0]) for r in results]
     ci_highs  = [naive_ci_high_r2] + [float(r["95% CI (r²)"].strip("[]").split(",")[1]) for r in results]
 
-    colors = ["steelblue"] + ["crimson"] * 4
+    colors = ["grey"] + ["crimson"] * 4
     bars = ax.bar(labels, r2_values, color=colors, alpha=0.8, edgecolor="k", linewidth=0.5)
 
     for i, (bar, val) in enumerate(zip(bars, r2_values)):
