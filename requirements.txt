@@ -1,0 +1,15 @@
+pandas
+numpy
+matplotlib
+seaborn
+scipy
+scikit-learn
+statsmodels
+geopandas
+folium
+shapely
+branca
+umap-learn
+libpysal
+esda
+cmcrameri
