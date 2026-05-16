@@ -122,12 +122,13 @@ def plot_amenity_price_corr(df: pd.DataFrame) -> None:
     colors = ["#d9534f" if v < 0 else "#5b9bd5" for v in corrs]
     colors[list(corrs.index).index("total count")] = "#2ca02c"
 
-    fig, ax = plt.subplots(figsize=(7, len(corrs) * 0.35 + 1))
-    ax.barh(corrs.index, corrs.values, color=colors)
-    ax.axvline(0, color="black", linewidth=0.8)
-    ax.set_xlabel("Pearson correlation with price")
+    fig, ax = plt.subplots(figsize=(len(corrs) * 0.35 + 1, 7))
+    ax.bar(corrs.index, corrs.values, color=colors)    
+    ax.axhline(0, color="black", linewidth=0.8)  
+    ax.set_ylabel("Pearson correlation with price")  
     ax.set_title("Correlation between amenities and listing price")
-    ax.grid(axis="x", alpha=0.3)
+    ax.tick_params(axis="x", rotation=90)   
+    ax.grid(alpha=0.3)   
     plt.tight_layout()
     plt.show()
 
