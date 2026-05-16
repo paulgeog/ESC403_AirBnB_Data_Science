@@ -22,7 +22,7 @@ def plot_fit_resid(X: pd.DataFrame, y: pd.DataFrame) -> None:
     reg = sm.OLS(y, X).fit()
     # -------------------------------------------
     # parameter calculation
-    X2 = X["airbnb_density"]
+    X2 = X.iloc[:, 1]  # grabs first predictor column, skipping the constant
     infl = OLSInfluence(reg)
     fitted = reg.fittedvalues
     resid = reg.resid
@@ -32,8 +32,6 @@ def plot_fit_resid(X: pd.DataFrame, y: pd.DataFrame) -> None:
     resid_stud = infl.resid_studentized_internal.to_numpy()
     leverage = infl.hat_matrix_diag
     cooks = infl.cooks_distance[0]
-    inter, s = reg.params
-    line = s * X + inter
     # -------------------------------------------
     # plot setup
     fig, axs = plt.subplots(1,5, figsize=(18, 4))
@@ -44,7 +42,9 @@ def plot_fit_resid(X: pd.DataFrame, y: pd.DataFrame) -> None:
                    s=25,
                    facecolors="none",
                    edgecolors="grey")
-    axs[0].plot(X2, line, lw=1, color='red', alpha=0.8)
+    sort_idx = X2.argsort()
+    axs[0].plot(X2.iloc[sort_idx], reg.fittedvalues.iloc[sort_idx], lw=1, color='crimson', alpha=0.8)
+    #axs[0].plot(X2, reg.fittedvalues, lw=1, color='crimson', alpha=0.8)
     axs[0].set_xlabel("Predictor")
     x_pad = 0.05 * (max(X2) - min(X2))
     y_pad = 0.05 * (max(y) - min(y))
@@ -64,7 +64,7 @@ def plot_fit_resid(X: pd.DataFrame, y: pd.DataFrame) -> None:
                       "edgecolors": "grey"
                       },
                   line_kws={
-                      'color': 'red',
+                      'color': 'crimson',
                       'lw': 1,
                       'alpha': 0.8
                       },
@@ -101,7 +101,7 @@ def plot_fit_resid(X: pd.DataFrame, y: pd.DataFrame) -> None:
               scatter=False,
               ci=False,
               lowess=True,
-              line_kws={"color": "red", "lw": 1, "alpha": 0.8},
+              line_kws={"color": "crimson", "lw": 1, "alpha": 0.8},
               ax=axs[3])
     axs[3].set_xlabel("Fitted values")
     axs[3].set_ylabel(r"$\sqrt{|Standardized Residuals|}$")
@@ -220,25 +220,22 @@ def bootstrap_r(x, y, n_boot=10000, ci=95, seed=42):
     return boot_r, ci_low, ci_high
 
 # calculating partial correlations
-def get_part_corr(gdf: gpd.GeoDataFrame, y1_col: str, y2_col: str, naive_r: float, naive_p: float, n_boot: int = 10000) -> pd.DataFrame:
+def get_part_corr(gdf: gpd.GeoDataFrame, y1_col: str, y2_col: str, naive_r: float, naive_p: float, n_boot: int = 10000):
     center_definitions = {
         "Hauptbahnhof": "dist_hb",
         "Paradeplatz":  "dist_paradeplatz",
         "Bellevue":     "dist_bellevue",
         "Grossmünster": "dist_grossmunster",
     }
-    
     results = []
+    residuals = {}  # new: store residuals per center
 
     for label, dist_col in center_definitions.items():
         dist = gdf[dist_col]
-        
-        resid_rent   = get_residuals(gdf[y1_col], dist)
-        resid_airbnb = get_residuals(gdf[y2_col], dist)
-        
-        partial_r, partial_p = stats.pearsonr(resid_rent, resid_airbnb)
-        _, ci_low, ci_high = bootstrap_r(resid_rent, resid_airbnb, n_boot=n_boot)
-
+        resid_y1 = get_residuals(gdf[y1_col], dist)
+        resid_y2 = get_residuals(gdf[y2_col], dist)
+        partial_r, partial_p = stats.pearsonr(resid_y1, resid_y2)
+        _, ci_low, ci_high = bootstrap_r(resid_y1, resid_y2, n_boot=n_boot)
         results.append({
             "Center Definition": label,
             "Partial r":         round(partial_r, 3),
@@ -247,15 +244,82 @@ def get_part_corr(gdf: gpd.GeoDataFrame, y1_col: str, y2_col: str, naive_r: floa
             "p-value":           round(partial_p, 4),
             "Significant":       partial_p < 0.05,
         })
-    results_df = pd.DataFrame(results)
+        residuals[label] = {
+            "dist":     np.array(dist),
+            "y1":       np.array(gdf[y1_col]),
+            "y2":       np.array(gdf[y2_col]),
+            "resid_y1": np.array(resid_y1),
+            "resid_y2": np.array(resid_y2),
+        }
 
-    # print summary table
+    results_df = pd.DataFrame(results)
     print("Summary")
     print(f"  Naive r:  {naive_r:.3f} (p = {naive_p:.4f})")
-    print(results_df.to_string(index=False))
+    return results_df, residuals  # now returns both
 
-    return results
+# ------------------------------------------
+# 5.4.2. Partial Correlation visualisation
+# ------------------------------------------
 
+def plot_partial_corr(results_df: pd.DataFrame, residuals: dict, y1_col: str, y2_col: str):
+    n = len(residuals)
+    fig, axs = plt.subplots(n, 3, figsize=(20, 5 * n))
+    fig.suptitle("Partial Correlations by City Center", fontsize=14, y=1.01)
+
+    def draw_panel(ax, x_vals, y_vals, x_label, y_label, show_zero_lines=False):
+        X = sm.add_constant(x_vals)
+        model = sm.OLS(y_vals, X).fit()
+        fitted = np.array(model.fittedvalues)
+        x_sorted = np.sort(x_vals)
+
+        # zero reference lines for residual plots
+        if show_zero_lines:
+            ax.axhline(0, color='grey', lw=0.8, linestyle='--', alpha=0.4, zorder=1)
+            ax.axvline(0, color='grey', lw=0.8, linestyle='--', alpha=0.4, zorder=1)
+
+        # residual lines
+        for xi, yi, fi in zip(x_vals, y_vals, fitted):
+            ax.plot([xi, xi], [yi, fi], color='crimson', lw=0.8, alpha=0.6)
+
+        # scatter points
+        ax.scatter(x_vals, y_vals, marker='o', s=25,
+                facecolors='none', edgecolors='grey', zorder=3)
+
+        # regression line
+        ax.plot(x_sorted, model.params[0] + model.params[1] * x_sorted,
+                color='black', lw=1, alpha=0.8, zorder=2)
+
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
+
+    for row, (label, data) in enumerate(residuals.items()):
+        partial_r2 = results_df.loc[results_df["Center Definition"] == label, "Partial r²"].values[0]
+
+        draw_panel(axs[row, 0], data["dist"], data["y1"],
+                   x_label=f"Distance to {label} (m)", y_label=y1_col)
+        axs[row, 0].set_title(f"{label} — {y1_col} vs Distance")
+
+        draw_panel(axs[row, 1], data["dist"], data["y2"],
+                   x_label=f"Distance to {label} (m)", y_label=y2_col)
+        axs[row, 1].set_title(f"{label} — {y2_col} vs Distance")
+
+        draw_panel(axs[row, 2], data["resid_y2"], data["resid_y1"],
+                   x_label=f"Residuals ({y2_col} ~ distance)",
+                   y_label=f"Residuals ({y1_col} ~ distance)", show_zero_lines=True)
+        axs[row, 2].set_title(f"{label} — Partial r² = {partial_r2:.3f}")
+
+    # sync axes limits column by column
+    for col in range(3):
+        x_min = min(axs[row, col].get_xlim()[0] for row in range(n))
+        x_max = max(axs[row, col].get_xlim()[1] for row in range(n))
+        y_min = min(axs[row, col].get_ylim()[0] for row in range(n))
+        y_max = max(axs[row, col].get_ylim()[1] for row in range(n))
+        for row in range(n):
+            axs[row, col].set_xlim(x_min, x_max)
+            axs[row, col].set_ylim(y_min, y_max)
+
+    plt.tight_layout()
+    plt.show()
 
 # ------------------------------------------
 # 5.4.3. Visualisation
@@ -269,7 +333,7 @@ def plot_bar_r(naive_r: float, naive_ci_low_r2: float, naive_ci_high_r2: float, 
     ci_lows   = [naive_ci_low_r2]  + [float(r["95% CI (r²)"].strip("[]").split(",")[0]) for r in results]
     ci_highs  = [naive_ci_high_r2] + [float(r["95% CI (r²)"].strip("[]").split(",")[1]) for r in results]
 
-    colors = ["steelblue"] + ["crimson"] * 4
+    colors = ["grey"] + ["crimson"] * 4
     bars = ax.bar(labels, r2_values, color=colors, alpha=0.8, edgecolor="k", linewidth=0.5)
 
     for i, (bar, val) in enumerate(zip(bars, r2_values)):
