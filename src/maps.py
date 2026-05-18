@@ -25,7 +25,7 @@ def zurich_map_eda(airbnb_gdf: gpd, forest: gpd, quartiere: gpd) -> map:
     # initiate folium map canvas
     m = folium.Map(
         location=[47.3769, 8.5417],
-        zoom_start=12,
+        zoom_start=12, 
         min_zoom=12,
         max_zoom=17,
         tiles="CartoDB dark-matter" # the bright map would be CartoDB positron
@@ -114,11 +114,20 @@ def zurich_map_eda(airbnb_gdf: gpd, forest: gpd, quartiere: gpd) -> map:
 # 4.3.1. Rental price/ Geographic distribution of rental prices
 # -------------------------------------------------
 def quartier_map(gdf: gpd.GeoDataFrame, column: str, title: str) -> None:
+    lake = gpd.read_file("data/zurichsee.gpkg").to_crs(epsg=2056)
+    lake = lake.dissolve()
+
     fig, ax = plt.subplots(figsize=(7, 7))
     gdf.plot(ax=ax,
              column=column,
              cmap=cmc.lapaz,
-             legend=True)
+             legend=True,
+             zorder=0)
+    lake.plot(ax=ax,
+              color="white",
+              edgecolor="black",
+              linewidth=0.5,
+              zorder=1)
     ax.axis("off")
     plt.title(title)
     plt.tight_layout
